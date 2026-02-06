@@ -1,0 +1,77 @@
+name: Xcode - Build and Artifact
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build and analyse default scheme using xcodebuild command
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Detect workspace or project
+        id: project_meta
+        shell: bash
+        run: |
+          workspace=$(ls -A | grep -i '\.xcworkspace$' || true)
+          project=$(ls -A | grep -i '\.xcodeproj$' || true)
+          if [ -n "$workspace" ]; then
+            filetype_parameter="workspace"
+            file_to_build=$(echo "$workspace" | head -n1)
+          elif [ -n "$project" ]; then
+            filetype_parameter="project"
+            file_to_build=$(echo "$project" | head -n1)
+          else
+            echo "No .xcworkspace or .xcodeproj found" >&2
+            exit 1
+          fi
+          file_to_build=$(echo "$file_to_build" | awk '{$1=$1;print}')
+          echo "Using $filetype_parameter: $file_to_build"
+          echo "filetype_parameter=$filetype_parameter" >> "$GITHUB_OUTPUT"
+          echo "file_to_build=$file_to_build" >> "$GITHUB_OUTPUT"
+      - name: Build Release archive (.xcarchive)
+        shell: bash
+        run: |
+          scheme=$(cat default)
+          archive_path="$PWD/build/App.xcarchive"
+          xcodebuild \
+            archive \
+            -scheme "$scheme" \
+            -${{ steps.project_meta.outputs.filetype_parameter }} "${{ steps.project_meta.outputs.file_to_build }}" \
+            -configuration Release \
+            -archivePath "$archive_path" \
+            -derivedDataPath "$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Package .app into zip
+        id: package
+        shell: bash
+        run: |
+          archive_path="$PWD/build/App.xcarchive"
+          app_bundle=$(find "$archive_path/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
+          if [ -z "$app_bundle" ]; then
+            echo "No .app bundle found in archive" >&2
+            exit 1
+          fi
+          app_name=$(basename "$app_bundle")
+          zip_path="$PWD/build/${app_name%.app}.zip"
+          pushd "$(dirname "$app_bundle")" >/dev/null
+          zip -r "$zip_path" "$app_name"
+          popd >/dev/null
+          echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "app_name=$app_name" >> "$GITHUB_OUTPUT"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.app_name }}
+          path: ${{ steps.package.outputs.zip_path }}
+          scheme: ${{ 'default' }}
+        run: |
+          if [ $scheme = default ]; then scheme=$(cat default); fi
+          if [ "`ls -A | grep -i \\.xcworkspace\$`" ]; then filetype_parameter="workspace" && file_to_build="`ls -A | grep -i \\.xcworkspace\$`"; else filetype_parameter="project" && file_to_build="`ls -A | grep -i \\.xcodeproj\$`"; fi
+          file_to_build=`echo $file_to_build | awk '{$1=$1;print}'`
+          xcodebuild clean build analyze -scheme "$scheme" -"$filetype_parameter" "$file_to_build" | xcpretty && exit ${PIPESTATUS[0]}
