@@ -30,6 +30,25 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$PWD/build" \
             CODE_SIGNING_ALLOWED=NO
+      - name: Set app icon (generate icns and update Info.plist)
+        shell: bash
+        run: |
+          app_bundle=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
+          if [ -z "$app_bundle" ]; then
+            echo "No .app bundle found in archive to set icon" >&2
+            exit 1
+          fi
+          icns_path="$PWD/build/AppIcon.icns"
+          if ! iconutil -c icns AppIcon.icon -o "$icns_path"; then
+            echo "iconutil failed to generate .icns from AppIcon.icon" >&2
+            exit 1
+          fi
+          mkdir -p "$app_bundle/Contents/Resources"
+          cp "$icns_path" "$app_bundle/Contents/Resources/AppIcon.icns"
+          plist="$app_bundle/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist"
+          echo "Applied app icon to $app_bundle"
       - name: Ad-hoc sign app and extensions
         shell: bash
         run: |
