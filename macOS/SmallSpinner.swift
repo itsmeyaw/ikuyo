@@ -1,6 +1,6 @@
 //
 //  SmallSpinner.swift
-//  Transitiq
+//  Ikuyo
 //
 //  Created by Yudhistira Wibowo on 05.02.26.
 //
