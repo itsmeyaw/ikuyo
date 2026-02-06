@@ -30,7 +30,7 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$PWD/build" \
             CODE_SIGNING_ALLOWED=NO
-      - name: Set app icon (generate icns and update Info.plist)
+      - name: Set app icon (best-effort)
         shell: bash
         run: |
           app_bundle=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
@@ -38,17 +38,54 @@ jobs:
             echo "No .app bundle found in archive to set icon" >&2
             exit 1
           fi
+
           icns_path="$PWD/build/AppIcon.icns"
-          if ! iconutil -c icns AppIcon.icon -o "$icns_path"; then
-            echo "iconutil failed to generate .icns from AppIcon.icon" >&2
-            exit 1
+          icon_source=""
+
+          # 1) Provided icns
+          if [ -f AppIcon.icns ]; then
+            cp AppIcon.icns "$icns_path"
+            icon_source="AppIcon.icns (provided)"
           fi
+
+          # 2) Build from AppIcon.png (generate an iconset and convert)
+          if [ -z "$icon_source" ] && [ -f AppIcon.png ]; then
+            workdir="$PWD/build/AppIcon.iconset"
+            rm -rf "$workdir"
+            mkdir -p "$workdir"
+            for size in 16 32 128 256 512; do
+              sips -z $size $size AppIcon.png --out "$workdir/icon_${size}x${size}.png" >/dev/null
+              double=$((size*2))
+              sips -z $double $double AppIcon.png --out "$workdir/icon_${size}x${size}@2x.png" >/dev/null
+            done
+            if iconutil -c icns "$workdir" -o "$icns_path"; then
+              icon_source="AppIcon.png (generated)"
+            fi
+          fi
+
+          # 3) AppIcon.iconset or AppIcon.icon
+          if [ -z "$icon_source" ] && [ -d AppIcon.iconset ]; then
+            if iconutil -c icns AppIcon.iconset -o "$icns_path"; then
+              icon_source="AppIcon.iconset"
+            fi
+          fi
+          if [ -z "$icon_source" ] && [ -d AppIcon.icon ]; then
+            if iconutil -c icns AppIcon.icon -o "$icns_path"; then
+              icon_source="AppIcon.icon"
+            fi
+          fi
+
+          if [ ! -f "$icns_path" ]; then
+            echo "No usable .icns generated (iconutil may not support the provided assets); keeping default icon." >&2
+            exit 0
+          fi
+
           mkdir -p "$app_bundle/Contents/Resources"
           cp "$icns_path" "$app_bundle/Contents/Resources/AppIcon.icns"
           plist="$app_bundle/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist"
-          echo "Applied app icon to $app_bundle"
+          echo "Applied app icon from $icon_source to $app_bundle"
       - name: Ad-hoc sign app and extensions
         shell: bash
         run: |
