@@ -10,55 +10,31 @@ jobs:
   build:
     name: Build and analyse default scheme using xcodebuild command
     runs-on: macos-latest
+    env:
+      PROJECT: Ikuyo.xcodeproj
+      SCHEME: Ikuyo
+      CONFIGURATION: Release
+      ARCHIVE_PATH: ${{ github.workspace }}/build/Ikuyo.xcarchive
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set Default Scheme
-        run: |
-          scheme_list=$(xcodebuild -list -json | tr -d "\n")
-          default=$(echo $scheme_list | ruby -e "require 'json'; puts JSON.parse(STDIN.gets)['project']['targets'][0]")
-          echo $default | cat >default
-          echo Using default scheme: $default
-      - name: Detect workspace or project
-        id: project_meta
-        shell: bash
-        run: |
-          workspace=$(ls -A | grep -i '\.xcworkspace$' || true)
-          project=$(ls -A | grep -i '\.xcodeproj$' || true)
-          if [ -n "$workspace" ]; then
-            filetype_parameter="workspace"
-            file_to_build=$(echo "$workspace" | head -n1)
-          elif [ -n "$project" ]; then
-            filetype_parameter="project"
-            file_to_build=$(echo "$project" | head -n1)
-          else
-            echo "No .xcworkspace or .xcodeproj found" >&2
-            exit 1
-          fi
-          file_to_build=$(echo "$file_to_build" | awk '{$1=$1;print}')
-          echo "Using $filetype_parameter: $file_to_build"
-          echo "filetype_parameter=$filetype_parameter" >> "$GITHUB_OUTPUT"
-          echo "file_to_build=$file_to_build" >> "$GITHUB_OUTPUT"
       - name: Build Release archive (.xcarchive)
         shell: bash
         run: |
-          scheme=$(cat default)
-          archive_path="$PWD/build/App.xcarchive"
           xcodebuild \
             archive \
-            -scheme "$scheme" \
-            -${{ steps.project_meta.outputs.filetype_parameter }} "${{ steps.project_meta.outputs.file_to_build }}" \
-            -configuration Release \
-            -archivePath "$archive_path" \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$PWD/build" \
             CODE_SIGNING_ALLOWED=NO
       - name: Package .app into zip
         id: package
         shell: bash
         run: |
-          archive_path="$PWD/build/App.xcarchive"
-          app_bundle=$(find "$archive_path/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
+          app_bundle=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
           if [ -z "$app_bundle" ]; then
             echo "No .app bundle found in archive" >&2
             exit 1
