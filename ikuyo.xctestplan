@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "0A6DF2C8-8228-477F-BD7B-D1FFC9BC8CED",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Ikuyo.xcodeproj",
+      "identifier" : "E484EE762E3C393E0052829F",
+      "name" : "Ikuyo"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:Ikuyo.xcodeproj",
+        "identifier" : "E484EE862E3C39400052829F",
+        "name" : "IkuyoTests"
+      }
+    }
+  ],
+  "version" : 1
+}
