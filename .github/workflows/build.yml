@@ -30,6 +30,16 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -derivedDataPath "$PWD/build" \
             CODE_SIGNING_ALLOWED=NO
+      - name: Ad-hoc sign app and extensions
+        shell: bash
+        run: |
+          app_bundle=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name "*.app" | head -n1)
+          if [ -z "$app_bundle" ]; then
+            echo "No .app bundle found in archive for codesign" >&2
+            exit 1
+          fi
+          echo "Ad-hoc signing $app_bundle"
+          codesign -f -s "-" --deep --options runtime --timestamp=none "$app_bundle"
       - name: Package .app into zip
         id: package
         shell: bash
